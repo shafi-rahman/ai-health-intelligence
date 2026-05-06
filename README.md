@@ -18,6 +18,32 @@ A self-hosted, privacy-first AI health assistant built with Laravel 12, Ollama, 
 
 ---
 
+## Screenshots
+
+### Login & Register
+<p align="center">
+  <img src="login.png" alt="Login" width="48%"/>
+  &nbsp;
+  <img src="register.png" alt="Register" width="48%"/>
+</p>
+
+### Dashboard
+<p align="center">
+  <img src="dashboard.png" alt="Dashboard" width="100%"/>
+</p>
+
+### Health AI Chat — Specialist Selection
+<p align="center">
+  <img src="doctor-select.png" alt="Choose Your Specialist" width="100%"/>
+</p>
+
+### Health AI Chat — Conversation
+<p align="center">
+  <img src="doctor-chat.png" alt="Health AI Chat" width="100%"/>
+</p>
+
+---
+
 ## Architecture
 
 ```
@@ -96,7 +122,7 @@ ollama pull qwen2.5       # 7B · Strong multilingual support
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/ai-health-intelligence.git
+git clone https://github.com/shafi-rahman/ai-health-intelligence.git
 cd ai-health-intelligence/laravel-app
 ```
 
