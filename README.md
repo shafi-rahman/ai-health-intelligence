@@ -329,6 +329,15 @@ This application is for **informational and educational purposes only**. AI-gene
 
 ---
 
-## License
+## 👨‍💻 Author
 
-MIT
+**Shafi Ur Rahman**  
+Senior PHP / Laravel Developer  
+
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Shafi%20Ur%20Rahman-blue?logo=linkedin&style=flat-square)](https://www.linkedin.com/in/shafirahman-com/)
+
+---
+
+## 📄 License
+
+MIT — free to use, modify, and distribute.
