@@ -3,7 +3,7 @@ services:
     image: mysql:8.0
     environment:
       MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
-      MYSQL_DATABASE: ai_saas_support
+      MYSQL_DATABASE: ai_health_intelligence
     ports:
       - "3306:3306"
     volumes:

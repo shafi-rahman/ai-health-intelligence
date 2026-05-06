@@ -1,5 +1,32 @@
-# Claude Code memory (local only)
+# =============================================================================
+# AI Health Intelligence — Repository Root
+# =============================================================================
+
+# ── Claude Code local memory (machine-specific, never commit) ─────────────────
 .claude/
 
-# Laravel's default stub README (project README is at repo root)
+# ── Laravel stub README (real README is at repo root) ─────────────────────────
 laravel-app/README.md
+
+# ── OS Generated ──────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ── IDE & Editors ─────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+.fleet/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+*.bak
+*.tmp
+*.orig
