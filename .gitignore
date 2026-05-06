@@ -2,6 +2,9 @@
 # AI Health Intelligence — Repository Root
 # =============================================================================
 
+# ── Private / proprietary documents — never share ────────────────────────────
+ai_health_intelligence_platform_claude_prompt_guide.md
+
 # ── Claude Code local memory (machine-specific, never commit) ─────────────────
 .claude/
 
