@@ -1,2 +1,5 @@
 # Claude Code memory (local only)
 .claude/
+
+# Laravel's default stub README (project README is at repo root)
+laravel-app/README.md
