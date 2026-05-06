@@ -1,0 +1,193 @@
+<?php
+
+namespace App\Jobs;
+
+use App\Models\Document;
+use App\Models\DocumentChunk;
+use App\Services\AI\EmbeddingService;
+use App\Services\Qdrant\QdrantService;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
+
+class ProcessDocumentJob implements ShouldQueue
+{
+    use Queueable;
+
+    public int $timeout = 600;
+    public int $tries   = 2;
+
+    public function __construct(private Document $document) {}
+
+    public function handle(EmbeddingService $embedder, QdrantService $qdrant): void
+    {
+        $this->document->update(['status' => 'processing']);
+
+        try {
+            $text   = $this->extractText();
+            $chunks = $this->chunkText($text, chunkSize: 500, overlap: 50);
+
+            $qdrant->ensureCollection();
+            $count = 0;
+
+            foreach ($chunks as $index => $chunk) {
+                if (trim($chunk) === '') {
+                    continue;
+                }
+
+                $vector  = $embedder->embed($chunk);
+                $dbChunk = DocumentChunk::create([
+                    'document_id' => $this->document->id,
+                    'tenant_id'   => $this->document->tenant_id,
+                    'chunk_index' => $index,
+                    'content'     => $chunk,
+                ]);
+
+                $qdrant->upsert($dbChunk->id, $vector, [
+                    'tenant_id'   => $this->document->tenant_id,
+                    'document_id' => $this->document->id,
+                    'chunk_id'    => $dbChunk->id,
+                    'chunk_index' => $index,
+                    'content'     => $chunk,
+                    'title'       => $this->document->title,
+                ]);
+
+                $count++;
+            }
+
+            $this->document->update(['status' => 'ready', 'chunk_count' => $count]);
+
+            // Dispatch health analysis for medical documents (runs after RAG indexing)
+            if (in_array($this->document->category, ['medical_report', 'prescription'])) {
+                AnalyzeMedicalDocumentJob::dispatch($this->document);
+            }
+        } catch (\Throwable $e) {
+            $this->document->update(['status' => 'failed', 'error' => $e->getMessage()]);
+            throw $e;
+        }
+    }
+
+    private function extractText(): string
+    {
+        return match ($this->document->type) {
+            'text'  => Storage::disk('local')->get($this->document->source),
+            'pdf'   => $this->extractPdf(),
+            'url'   => $this->extractUrl(),
+            'docx'  => $this->extractDocx(),
+            'csv'   => $this->extractCsv(),
+            'txt'   => Storage::disk('local')->get($this->document->source),
+            'image' => $this->extractImage(),
+            default => throw new \RuntimeException("Unsupported document type: {$this->document->type}"),
+        };
+    }
+
+    private function extractPdf(): string
+    {
+        if (!class_exists(\Smalot\PdfParser\Parser::class)) {
+            throw new \RuntimeException(
+                'PDF parsing requires smalot/pdfparser. Run: composer require smalot/pdfparser'
+            );
+        }
+
+        $path   = Storage::disk('local')->path($this->document->source);
+        $parser = new \Smalot\PdfParser\Parser();
+        $pdf    = $parser->parseFile($path);
+
+        return $pdf->getText();
+    }
+
+    private function extractDocx(): string
+    {
+        $path = Storage::disk('local')->path($this->document->source);
+        $zip  = new \ZipArchive();
+
+        if ($zip->open($path) !== true) {
+            throw new \RuntimeException('Could not open DOCX file.');
+        }
+
+        $xml = $zip->getFromName('word/document.xml');
+        $zip->close();
+
+        if ($xml === false) {
+            throw new \RuntimeException('Invalid DOCX: missing word/document.xml');
+        }
+
+        $text = strip_tags(str_replace(['</w:p>', '</w:tr>'], "\n", $xml));
+        return preg_replace('/[ \t]+/', ' ', $text);
+    }
+
+    private function extractCsv(): string
+    {
+        $path  = Storage::disk('local')->path($this->document->source);
+        $lines = [];
+
+        if (($fh = fopen($path, 'r')) !== false) {
+            $headers = null;
+            while (($row = fgetcsv($fh)) !== false) {
+                if ($headers === null) {
+                    $headers = $row;
+                    continue;
+                }
+                $paired  = array_combine($headers, array_pad($row, count($headers), ''));
+                $lines[] = implode(', ', array_map(fn($k, $v) => "$k: $v", array_keys($paired), $paired));
+            }
+            fclose($fh);
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function extractUrl(): string
+    {
+        $response = Http::timeout(30)->get($this->document->source);
+
+        if ($response->failed()) {
+            throw new \RuntimeException("Failed to fetch URL ({$response->status()}): {$this->document->source}");
+        }
+
+        $text = strip_tags($response->body());
+
+        return preg_replace('/\s+/', ' ', trim($text));
+    }
+
+    private function extractImage(): string
+    {
+        // OCR via Tesseract CLI if available; falls back to a placeholder so the
+        // AnalyzeMedicalDocumentJob still runs (LLM can handle partial content).
+        $path = Storage::disk('local')->path($this->document->source);
+
+        $checkCmd = PHP_OS_FAMILY === 'Windows' ? 'where tesseract 2>NUL' : 'which tesseract 2>/dev/null';
+        if (function_exists('shell_exec') && shell_exec($checkCmd)) {
+            $redirect = PHP_OS_FAMILY === 'Windows' ? '2>NUL' : '2>/dev/null';
+            $output   = shell_exec("tesseract " . escapeshellarg($path) . " stdout {$redirect}");
+            if (!empty(trim($output ?? ''))) {
+                return $output;
+            }
+        }
+
+        throw new \RuntimeException(
+            'Image OCR requires Tesseract. Install it with: apt-get install tesseract-ocr'
+        );
+    }
+
+    // Fixed-size word chunker with overlap
+    private function chunkText(string $text, int $chunkSize, int $overlap): array
+    {
+        $words  = preg_split('/\s+/', trim($text), -1, PREG_SPLIT_NO_EMPTY);
+        $chunks = [];
+        $total  = count($words);
+        $step   = max(1, $chunkSize - $overlap);
+        $i      = 0;
+
+        while ($i < $total) {
+            $chunk = implode(' ', array_slice($words, $i, $chunkSize));
+            if ($chunk !== '') {
+                $chunks[] = $chunk;
+            }
+            $i += $step;
+        }
+
+        return $chunks;
+    }
+}
