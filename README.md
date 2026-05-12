@@ -32,27 +32,27 @@ The goal was to build a production-grade RAG pipeline for a sensitive domain (me
 │                      Laravel 12 Core                             │
 │                                                                  │
 │   Auth (Sanctum)  │  Queue (DB driver)  │  Rate Limiting         │
-│   Tenant Scope    │  Event Pipeline     │  Middleware Stack       │
-└────────┬──────────────────────┬─────────────────────────────────-┘
+│   Tenant Scope    │  Event Pipeline     │  Middleware Stack      │
+└────────┬──────────────────────┬──────────────────────────────────┘
          │                      │
          │ HTTP           Queue Jobs
          │                      │
-┌────────▼──────────┐  ┌────────▼────────────────────────────────-─┐
+┌────────▼──────────┐  ┌────────▼───────────────────────────────────┐
 │   AIManager       │  │         Background Processing              │
 │   (Orchestrator)  │  │                                            │
 │                   │  │  ProcessDocumentJob                        │
-│  ┌─────────────┐  │  │   └─ text extraction (PDF / OCR)          │
-│  │ OllamaProvider│ │  │   └─ chunk + embed via EmbeddingService   │
-│  │ (LLM client)│  │  │   └─ upsert vectors to Qdrant             │
-│  └──────┬──────┘  │  │                                            │
+│  ┌──────────────┐ │  │   └─ text extraction (PDF / OCR)           │
+│  │OllamaProvider│ │  │   └─ chunk + embed via EmbeddingService    │
+│  │ (LLM client) │ │  │   └─ upsert vectors to Qdrant              │
+│  └──────┬───────┘ │  │                                            │
 │         │         │  │  AnalyzeMedicalDocumentJob                 │
 │  ┌──────▼──────┐  │  │   └─ structured prompt construction        │
-│  │EmbeddingService│ │  │   └─ LLM analysis (findings, risk, meds) │
+│  │EmbeddingService│  │     └─ LLM analysis (findings, risk, meds) │
 │  │(nomic-embed)│  │  │   └─ persist structured JSON to DB         │
-│  └──────┬──────┘  │  └─────────────────────────────────────────--┘
+│  └──────┬──────┘  │  └────────────────────────────────────────────┘
 └─────────┼─────────┘
           │
-┌─────────▼─────────────────────────────────────────────────────--─┐
+┌─────────▼────────────────────────────────────────────────────────┐
 │                      Qdrant (Vector Store)                       │
 │   Collection: health_documents  │  Dim: 768  │  HNSW index       │
 │   Payload filters by tenant_id + document_id for data isolation  │
